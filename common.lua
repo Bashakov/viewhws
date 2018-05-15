@@ -1,3 +1,7 @@
+function sprintf(s, ...) 
+	return string.format(s, ...) 
+end
+
 
 function MakeCounter()
 	mt = {
@@ -38,3 +42,10 @@ function UniqueTableMaker()
 end
 
 
+function get_keys(tbl)
+	local res = {}
+	for n,v in pairs(tbl) do
+		res[#res + 1] = n
+	end
+	return res
+end

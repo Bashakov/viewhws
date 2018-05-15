@@ -4,7 +4,7 @@ local F = far.Flags
 local VK = win.GetVirtualKeys()
 local band, bor = bit64.band, bit64.bor
 
-local sprintf = function(s, ...) return string.format(s, ...) end
+require 'common'
 
 local hws_reader = require 'hws_reader'
 
@@ -48,9 +48,9 @@ function hws_panel:prepare_panel_info()
 	end
 	
 	local pm1 = {
-		ColumnTypes  = 'N,C0,C1,S',
-		ColumnWidths = '0,9,9,9',
-		ColumnTitles = {'Type', 'Rail', 'Channel', 'Count'},
+		ColumnTypes  = 'N',
+		ColumnWidths = '0',
+		ColumnTitles = {'Type'},
 	}
 	pm1.StatusColumnTypes = pm1.ColumnTypes
 	pm1.StatusColumnWidths = pm1.ColumnWidths;
@@ -81,45 +81,37 @@ function hws_panel:get_panel_list()
   return rc
 end
 
-local function keys(tbl)
-	local res = {}
-	for n,v in pairs(tbl) do
-		res[#res + 1] = n
-	end
-	return res
-end
-
-
 function hws_panel:get_panel_list_root()
+	local reader = self.reader
 	local result = { { FileName=".."; FileAttributes="d"; } }
 	
-	local dirs = {}
-	for key, coord_value in pairs(self.reader.values) do
-		dirs[key[1]] = true
-	end
-	-- dirs = keys(dirs)	
 	
-	for n,v in pairs(dirs) do
+	for n, v in ipairs(reader.names) do
 		result[#result+1] = {
 			FileAttributes="d",
-			UserData = nil,
-			FileName = n,
-			FileSize = 0,
+			FileName = v,
 		}
 	end
 	
-	for key, coord_value in pairs(self.reader.values) do
-		local file_item = {}
-		
-		file_item.UserData = key
-		file_item.FileName = key[1]
-		file_item.FileSize = #coord_value
-		file_item.CustomColumnData = {
-			sprintf('%9d', key[2]), 
-			sprintf('%9d', key[3]), }
-		
-		-- result[#result+1]= file_item
+	for n, v in ipairs(reader.channels) do
+		result[#result+1] = {
+			FileAttributes="d",
+			FileName = v,
+		}
 	end
+	
+--	for key, coord_value in pairs(self.reader.values) do
+--		local file_item = {}
+		
+--		file_item.UserData = key
+--		file_item.FileName = key[1]
+--		file_item.FileSize = #coord_value
+--		file_item.CustomColumnData = {
+--			sprintf('%9d', key[2]), 
+--			sprintf('%9d', key[3]), }
+		
+--		result[#result+1]= file_item
+--	end
 	return result
 end
 

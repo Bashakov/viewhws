@@ -6,7 +6,6 @@ require 'common'
 
 -- =========================== READER ============================
 
-
 if not pcall(ffi.new, 'struct hws_compressed_xml_t') then
 	ffi.cdef[[
 		typedef unsigned char 	BYTE;
@@ -35,10 +34,12 @@ end
 
 function hws_reader:open(file_name)
 	local idx2names = {}
-	self.KeyGen = UniqueTableMaker()
 	self.file = assert(io.open(file_name, 'rb'))
 	
-	self.values = {} -- setmetatable({}, {__index=function() return {} end})
+	self.values = {}
+	local names = {}
+	local channels = {}
+
 	
 	if not self.check_header(self.file:read(4)) then 
 		error('wrong file header') 
@@ -59,18 +60,22 @@ function hws_reader:open(file_name)
 			assert(name)
 			idx2names[hws_item.nIdx] = name
 		elseif hws_item.nType == 2 then -- HWS_CXML_INDEXED_VALUE
-			local key = self.KeyGen(idx2names[hws_item.nIdx], hws_item.nRail, hws_item.nChannel)
-			if not self.values[key] then self.values[key] = {} end
-			local vals = self.values[key]
-			vals[#vals + 1] = {hws_item.nCoord, hws_item.nValue}
-			-- far.Message(key)
+			local rec_item = {
+				name = idx2names[hws_item.nIdx],
+				rail = hws_item.nRail,
+				channel = hws_item.nChannel,
+				coord = hws_item.nCoord, 
+				value = hws_item.nValue,
+			}
+			self.values[#self.values + 1] = rec_item
+			names[rec_item.name] = 1
+			channels[sprintf('%d_%d', rec_item.rail, rec_item.channel)] = 1
 		else
 			error('unknown item type: '..tostring(hws_item.nType))
 		end
 	end
---	for key, coord_value in pairs(self.values) do
---		far.Message(tostring(key) .. tonumber(#coord_value))
---	end
+	self.names = get_keys(names)
+	self.channels = get_keys(channels)
 	return self
 end
 

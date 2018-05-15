@@ -18,6 +18,7 @@ end
 
 local F = far.Flags
 
+LoadScript 'common'
 local hws_reader = LoadScript 'hws_reader'
 local hws_panel = LoadScript 'hws_panel'
 
