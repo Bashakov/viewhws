@@ -37,9 +37,6 @@ function hws_reader:open(file_name)
 	self.file = assert(io.open(file_name, 'rb'))
 	
 	self.values = {}
-	local names = {}
-	local channels = {}
-
 	
 	if not self.check_header(self.file:read(4)) then 
 		error('wrong file header') 
@@ -68,14 +65,10 @@ function hws_reader:open(file_name)
 				value = hws_item.nValue,
 			}
 			self.values[#self.values + 1] = rec_item
-			names[rec_item.name] = 1
-			channels[sprintf('%d_%d', rec_item.rail, rec_item.channel)] = 1
 		else
 			error('unknown item type: '..tostring(hws_item.nType))
 		end
 	end
-	self.names = get_keys(names)
-	self.channels = get_keys(channels)
 	return self
 end
 

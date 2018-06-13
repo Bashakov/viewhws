@@ -38,6 +38,25 @@ function hws_panel:open_root()
   return true
 end
 
+local function add_keybar_label(panel_info, label, vkc, cks)
+	local kbl = {
+		Text = label;
+		LongText = label;
+		VirtualKeyCode = vkc;
+		ControlKeyState = cks or 0;
+	}
+	
+	for _, item in pairs(panel_info.key_bar) do
+		if item.VirtualKeyCode == kbl.VirtualKeyCode and item.ControlKeyState == kbl.ControlKeyState then
+			item.Text = kbl.Text
+			item.LongText = kbl.LongText
+			return
+		end
+	end
+	
+	table.insert(panel_info.key_bar, kbl)
+end
+
 function hws_panel:prepare_panel_info()
 	local info = self.panel_info
 	info.title =  "HWS: " .. self.file_name:match("[^\\/]*$")
@@ -48,24 +67,41 @@ function hws_panel:prepare_panel_info()
 	end
 	
 	local pm1 = {
-		ColumnTypes  = 'N',
-		ColumnWidths = '0',
-		ColumnTitles = {'Type'},
+		ColumnTypes  = 'C0,N,C1,C2,C3,C4',
+		ColumnWidths = '6,0,6,6,13,10',
+		ColumnTitles = {'N', 'Type', 'Rail', 'Chnl', 'Coordinate', 'Value'},
 	}
 	pm1.StatusColumnTypes = pm1.ColumnTypes
 	pm1.StatusColumnWidths = pm1.ColumnWidths;
 	info.modes = {pm1,}
+	
+	info.key_bar = {}
+
+	for i = VK.F1, VK.F12 do
+		add_keybar_label(info, "", i, F.LEFT_CTRL_PRESSED + F.RIGHT_CTRL_PRESSED)
+		add_keybar_label(info, "", i, F.LEFT_ALT_PRESSED + F.LEFT_ALT_PRESSED)
+		add_keybar_label(info, "", i)
+	end
+	add_keybar_label(info, "NAME", VK.F5)
+	add_keybar_label(info, "RAIL", VK.F6)
+	add_keybar_label(info, "CHANNEL", VK.F7)
+	add_keybar_label(info, "SYS_COORD", VK.F8)
+	
 end
+
+
 
 function hws_panel:get_panel_info()
   return {
     CurDir           = self.curr_object;
     Flags            = bor(F.OPIF_DISABLESORTGROUPS, F.OPIF_DISABLEFILTER),
     HostFile         = self.file_name,
+	KeyBar           = self.panel_info.key_bar;
     PanelTitle       = self.panel_info.title,
 	PanelModesArray  = self.panel_info.modes;
     PanelModesNumber = #self.panel_info.modes;
 	StartPanelMode   = ("0"):byte();
+	StartSortMode    = F.SM_UNSORTED;
   }
 end
 
@@ -81,50 +117,60 @@ function hws_panel:get_panel_list()
   return rc
 end
 
+local function format_sys_coord(coord)
+	local mm = coord % 1000
+	local km_m = (coord - mm) /1000
+	local m = km_m % 1000
+	local km = (km_m-m) / 1000
+	return sprintf(' %03d.%03d.%03d', km, m, mm)
+end
+
+
 function hws_panel:get_panel_list_root()
 	local reader = self.reader
 	local result = { { FileName=".."; FileAttributes="d"; } }
 	
-	
-	for n, v in ipairs(reader.names) do
-		result[#result+1] = {
-			FileAttributes="d",
-			FileName = v,
-		}
-	end
-	
-	for n, v in ipairs(reader.channels) do
-		result[#result+1] = {
-			FileAttributes="d",
-			FileName = v,
-		}
-	end
-	
---	for key, coord_value in pairs(self.reader.values) do
---		local file_item = {}
+	for i, item in ipairs(self.reader.values) do
+		local file_item = {}
 		
---		file_item.UserData = key
---		file_item.FileName = key[1]
---		file_item.FileSize = #coord_value
---		file_item.CustomColumnData = {
---			sprintf('%9d', key[2]), 
---			sprintf('%9d', key[3]), }
-		
---		result[#result+1]= file_item
---	end
+		file_item.UserData = i
+		file_item.FileName = item.name
+		--file_item.FileSize =  0
+		file_item.CustomColumnData = {
+			sprintf('%5d', i), 
+			sprintf('%5d', item.rail), 
+			sprintf('%5d', item.channel),
+			--sprintf('%9d', item.coord),
+			format_sys_coord(item.coord),
+			sprintf('%9d', item.value),}
+		result[#result+1]= file_item
+	end
 	return result
 end
 
 function hws_panel:handle_keyboard(handle, key_event)
 	local vcode  = key_event.VirtualKeyCode
 	local cstate = key_event.ControlKeyState
+	local ctrl   = cstate == F.LEFT_CTRL_PRESSED or cstate == F.RIGHT_CTRL_PRESSED
+	local shift  = cstate == F.SHIFT_PRESSED
 
 	if vcode == VK.F3 or vcode == VK.F4 then
 		self:view_data(vcode == VK.F4)
 		return true
+	elseif vcode == VK.F5 then
+		self.filter_name()
+	elseif vcode == VK.F6 then
+		self.filter_rail()
 	end
 end
 
+function hws_panel.filter_name()
+	
+end
+
+function hws_panel.filter_rail()
+	
+end
 
 function hws_panel:view_data(edit)
 	local item = panel.GetCurrentPanelItem(nil, 1)
