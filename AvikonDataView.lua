@@ -17,7 +17,8 @@ end
 
 local F = far.Flags
 
-LoadScript 'common'
+LoadScript 'common'			-- for debug reload
+LoadScript 'xmlc_filter' 	-- for debug reload
 local xmlc_reader = LoadScript 'xmlc_reader'
 local xmlc_panel = LoadScript 'xmlc_panel'
 

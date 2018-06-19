@@ -7,6 +7,7 @@ local band, bor = bit64.band, bit64.bor
 require 'common'
 
 local xmlc_reader = require 'xmlc_reader'
+local xmlc_filter = require 'xmlc_filter'
 
 -- =========================== PANEL ============================
 
@@ -23,10 +24,12 @@ function xmlc_panel.open(file_name)
 			title = '',
 			modes = {};
 		},
-		reader = xmlc_reader.new()
+		reader = xmlc_reader.new(),
 	}
 	setmetatable(self, xmlc_panel_mt)
-	if self.reader:open(file_name) and self:open_root() then
+	if self.reader:open(file_name) then
+		self.filter = xmlc_filter.init(reader)
+		self:open_root()
 		return self
 	end
 end
@@ -82,13 +85,11 @@ function xmlc_panel:prepare_panel_info()
 		add_keybar_label(info, "", i, F.LEFT_ALT_PRESSED + F.LEFT_ALT_PRESSED)
 		add_keybar_label(info, "", i)
 	end
-	add_keybar_label(info, "FILTER", VK.F5)
---	add_keybar_label(info, "RAIL", VK.F6)
+	add_keybar_label(info, self.filter.enable and "OFF FLTR" or "ON FLTR", VK.F5)
+	add_keybar_label(info, "TUNE FLTR", VK.F6)
 --	add_keybar_label(info, "CHANNEL", VK.F7)
 --	add_keybar_label(info, "SYS_COORD", VK.F8)
-	
 end
-
 
 
 function xmlc_panel:get_panel_info()
@@ -127,6 +128,7 @@ end
 
 
 function xmlc_panel:get_panel_list_root()
+	--far.Message('get_panel_list_root')
 	local result = { { FileName=".."; FileAttributes="d"; } }
 	
 	for i, item in ipairs(self.reader.values) do
@@ -156,71 +158,17 @@ function xmlc_panel:handle_keyboard(handle, key_event)
 		self:view_data(vcode == VK.F4)
 		return true
 	elseif vcode == VK.F5 then
-		self:show_filter()
+		self.filter.enable = not self.filter.enable
+		self:prepare_panel_info()
+		panel.RedrawPanel (handle, 1) 
+		panel.UpdatePanel (handle, 1)
+		--far.Message('F5')
 		return true
+	elseif vcode == VK.F6 then
+		self.filter:show()
+		panel.UpdatePanel (handle, 1)
+		return true		
 	end
-end
-
-function xmlc_panel:show_filter()
-	local names = {}
-	for i, item in ipairs(self.reader.values) do
-		local v = item.name
-		names[v] = (names[v] or 0) + 1
-	end
-	
-	local list_items = {}
-	
-	for n,c in pairs(names) do
-		list_items[#list_items+1] = 
-		{ 
-			Text = sprintf('%s(%d)', n, c),
-			Flags = F.LIF_CHECKED,
-		}
-	end
-	
-	local list_flags = F.DIF_LISTNOAMPERSAND + F.DIF_FOCUS -- F.DIF_LISTNOBOX
-	local dlg_items = {
-		{F.DI_LISTBOX,   1,1,58,22, list_items, 0, 0, list_flags,      "Name"},
-	}
-
-	local function DlgProc(hDlg, Msg, Param1, Param2)
-		if Msg == F.DN_INITDIALOG then
-			--far.Message('DN_INITDIALOG')
-		elseif Msg == F.DN_LISTCHANGE then
-			--far.Message('DN_LISTCHANGE')
-		elseif Msg == F.DN_CONTROLINPUT then 
-			if Param2.EventType == F.KEY_EVENT and Param2.KeyDown and Param2.VirtualKeyCode == VK.SPACE then
-				--far.Message(sprintf('DN_CONTROLINPUT: %s %s %s %s', Param1, Param2.KeyDown, Param2.VirtualKeyCode, Param2.VirtualScanCode))
-				local idx = far.SendDlgMessage(hDlg, F.DM_LISTGETCURPOS, Param1, nil)
-				idx = idx and idx.SelectPos
-				if idx then
-					local item = far.SendDlgMessage(hDlg, F.DM_LISTGETITEM, Param1, idx)
-					local state = bit64.band(item.Flags, F.LIF_CHECKED) ~= 0
-					--far.Message(sprintf('idx = %s %s, %s %X', idx, state, item.Text, item.Flags))
-					local Flags = bit64.bxor(item.Flags, F.LIF_CHECKED)
-					far.SendDlgMessage(hDlg, F.DM_LISTUPDATE, Param1, {Index = idx, Text = item.Text, Flags = Flags})
-					dlg_items[Param1][6][idx].Flags = Flags
-				end
-			end
-		elseif Msg == F.DN_EDITCHANGE then
-			--far.Message('DN_EDITCHANGE')
-		end
-	end
-
-	local guid = win.Uuid("5943454A-B98B-4c94-8146-C212C16C010E")
-	local dlg = far.DialogInit(guid, -1, -1, 60, 25, nil, dlg_items, F.FDLG_NONE, DlgProc)
-	local rc = far.DialogRun(dlg)
-	if rc == 1 then  -- ok
-		-- pass
-	end
-	far.DialogFree(dlg)
-	
-	local s = ""
-	for i, n in ipairs(list_items) do
-		s = s .. string.format('%d %s %x\n', i, n.Text, n.Flags)
-	end
-	far.Message(s)
-	
 end
 
 
