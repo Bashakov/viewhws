@@ -127,7 +127,6 @@ end
 
 
 function hws_panel:get_panel_list_root()
-	local reader = self.reader
 	local result = { { FileName=".."; FileAttributes="d"; } }
 	
 	for i, item in ipairs(self.reader.values) do
@@ -142,7 +141,8 @@ function hws_panel:get_panel_list_root()
 			sprintf('%5d', item.channel),
 			--sprintf('%9d', item.coord),
 			format_sys_coord(item.coord),
-			sprintf('%9d', item.value),}
+			sprintf('%9d', item.value),
+			}
 		result[#result+1]= file_item
 	end
 	return result
@@ -158,17 +158,76 @@ function hws_panel:handle_keyboard(handle, key_event)
 		self:view_data(vcode == VK.F4)
 		return true
 	elseif vcode == VK.F5 then
-		self.filter_name()
+		self:filter_name()
 	elseif vcode == VK.F6 then
-		self.filter_rail()
+		self:filter_rail()
 	end
 end
 
-function hws_panel.filter_name()
+function hws_panel:filter_name()
+	local names = {}
+	for i, item in ipairs(self.reader.values) do
+		local v = item.name
+		names[v] = (names[v] or 0) + 1
+	end
+	
+	local list_items = {}
+	
+	for n,c in pairs(names) do
+		list_items[#list_items+1] = 
+		{ 
+			Text = sprintf('%s(%d)', n, c),
+			Flags = F.LIF_CHECKED,
+		}
+	end
+	
+	local list_flags = F.DIF_LISTNOAMPERSAND + F.DIF_FOCUS -- F.DIF_LISTNOBOX
+	local dlg_items = {
+		{F.DI_LISTBOX,   1,1,58,22, list_items, 0, 0, list_flags,      "Name"},
+		
+	}
+
+	local function DlgProc(hDlg, Msg, Param1, Param2)
+		if Msg == F.DN_INITDIALOG then
+			--far.Message('DN_INITDIALOG')
+		elseif Msg == F.DN_LISTCHANGE then
+			--far.Message('DN_LISTCHANGE')
+		elseif Msg == F.DN_CONTROLINPUT then 
+			if Param2.EventType == F.KEY_EVENT and Param2.KeyDown and Param2.VirtualKeyCode == VK.SPACE then
+				--far.Message(sprintf('DN_CONTROLINPUT: %s %s %s %s', Param1, Param2.KeyDown, Param2.VirtualKeyCode, Param2.VirtualScanCode))
+				local idx = far.SendDlgMessage(hDlg, F.DM_LISTGETCURPOS, Param1, nil)
+				idx = idx and idx.SelectPos
+				if idx then
+					local item = far.SendDlgMessage(hDlg, F.DM_LISTGETITEM, Param1, idx)
+					local state = bit64.band(item.Flags, F.LIF_CHECKED) ~= 0
+					--far.Message(sprintf('idx = %s %s, %s %X', idx, state, item.Text, item.Flags))
+					local Flags = bit64.bxor(item.Flags, F.LIF_CHECKED)
+					far.SendDlgMessage(hDlg, F.DM_LISTUPDATE, Param1, {Index = idx, Text = item.Text, Flags = Flags})
+					dlg_items[Param1][6][idx].Flags = Flags
+				end
+			end
+		elseif Msg == F.DN_EDITCHANGE then
+			--far.Message('DN_EDITCHANGE')
+		end
+	end
+
+	local guid = win.Uuid("5943454A-B98B-4c94-8146-C212C16C010E")
+	local dlg = far.DialogInit(guid, -1, -1, 60, 25, nil, dlg_items, F.FDLG_NONE, DlgProc)
+	local rc = far.DialogRun(dlg)
+	if rc == 1 then  -- ok
+		-- pass
+	end
+	far.DialogFree(dlg)
+	
+	local s = ""
+	for i, n in ipairs(list_items) do
+		s = s .. string.format('%d %s %x\n', i, n.Text, n.Flags)
+	end
+	far.Message(s)
 	
 end
 
-function hws_panel.filter_rail()
+function hws_panel:filter_rail()
 	
 end
 
