@@ -1,4 +1,3 @@
--- far.Message("load viewhws.lua")
 
 
 -- insert current dir in module search paths
@@ -19,8 +18,8 @@ end
 local F = far.Flags
 
 LoadScript 'common'
-local hws_reader = LoadScript 'hws_reader'
-local hws_panel = LoadScript 'hws_panel'
+local xmlc_reader = LoadScript 'xmlc_reader'
+local xmlc_panel = LoadScript 'xmlc_panel'
 
 
 -- ========================== EXPORTS ============================== 
@@ -31,7 +30,7 @@ function export.Analyse(info)
 	--far.Message(far.PluginStartupInfo().ModuleDir)
 	
 	local ext = info.FileName:lower():sub(-3)
-	local ok = (ext == 'hws' or ext == 'gps') and hws_reader.check_header(info.Buffer)
+	local ok = (ext == 'hws' or ext == 'gps') and xmlc_reader.check_header(info.Buffer)
 	return ok
 end
 
@@ -39,7 +38,7 @@ function export.Open(OpenFrom, Guid, Item)
 	-- far.Message("hws_view export.Open")
 
 	if OpenFrom == F.OPEN_ANALYSE then
-		return hws_panel.open(Item.FileName)
+		return xmlc_panel.open(Item.FileName)
 	end
 end
 
@@ -56,5 +55,5 @@ function export.ProcessPanelInput(object, handle, rec)
 end
 
 --function export.Configure (guid)
---  far.Message("hws_view export.Configure")
+--  far.Message("AvikonDataView export.Configure")
 --end

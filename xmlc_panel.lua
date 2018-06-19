@@ -1,4 +1,4 @@
--- far.Message("load hws_panel.lua")
+-- far.Message("load xmlc_panel.lua")
 
 local F = far.Flags
 local VK = win.GetVirtualKeys()
@@ -6,15 +6,15 @@ local band, bor = bit64.band, bit64.bor
 
 require 'common'
 
-local hws_reader = require 'hws_reader'
+local xmlc_reader = require 'xmlc_reader'
 
 -- =========================== PANEL ============================
 
-local hws_panel = {}
-local hws_panel_mt = {__index=hws_panel}
+local xmlc_panel = {}
+local xmlc_panel_mt = {__index=xmlc_panel}
 
 
-function hws_panel.open(file_name)
+function xmlc_panel.open(file_name)
 	local self = {
 		file_name = file_name,
 		curr_object = nil,
@@ -23,15 +23,15 @@ function hws_panel.open(file_name)
 			title = '',
 			modes = {};
 		},
-		reader = hws_reader.new()
+		reader = xmlc_reader.new()
 	}
-	setmetatable(self, hws_panel_mt)
+	setmetatable(self, xmlc_panel_mt)
 	if self.reader:open(file_name) and self:open_root() then
 		return self
 	end
 end
 
-function hws_panel:open_root()
+function xmlc_panel:open_root()
   self.panel_mode = "root"
   self.curr_object = ""
   self:prepare_panel_info()
@@ -57,23 +57,23 @@ local function add_keybar_label(panel_info, label, vkc, cks)
 	table.insert(panel_info.key_bar, kbl)
 end
 
-function hws_panel:prepare_panel_info()
+function xmlc_panel:prepare_panel_info()
 	local info = self.panel_info
-	info.title =  "HWS: " .. self.file_name:match("[^\\/]*$")
+	info.title =  "XMLC: " .. self.file_name:match("[^\\/]*$")
 	if self._curr_object == "" or self._curr_object == nil then
 		-- pass
 	else
 		info.title = info.title .. " [" .. self._curr_object .. "]"
 	end
 	
-	local pm1 = {
+	local pm = {
 		ColumnTypes  = 'C0,N,C1,C2,C3,C4',
 		ColumnWidths = '6,0,6,6,13,10',
 		ColumnTitles = {'N', 'Type', 'Rail', 'Chnl', 'Coordinate', 'Value'},
 	}
-	pm1.StatusColumnTypes = pm1.ColumnTypes
-	pm1.StatusColumnWidths = pm1.ColumnWidths;
-	info.modes = {pm1,}
+	pm.StatusColumnTypes = pm.ColumnTypes
+	pm.StatusColumnWidths = pm.ColumnWidths;
+	info.modes = {pm,}
 	
 	info.key_bar = {}
 
@@ -82,16 +82,16 @@ function hws_panel:prepare_panel_info()
 		add_keybar_label(info, "", i, F.LEFT_ALT_PRESSED + F.LEFT_ALT_PRESSED)
 		add_keybar_label(info, "", i)
 	end
-	add_keybar_label(info, "NAME", VK.F5)
-	add_keybar_label(info, "RAIL", VK.F6)
-	add_keybar_label(info, "CHANNEL", VK.F7)
-	add_keybar_label(info, "SYS_COORD", VK.F8)
+	add_keybar_label(info, "FILTER", VK.F5)
+--	add_keybar_label(info, "RAIL", VK.F6)
+--	add_keybar_label(info, "CHANNEL", VK.F7)
+--	add_keybar_label(info, "SYS_COORD", VK.F8)
 	
 end
 
 
 
-function hws_panel:get_panel_info()
+function xmlc_panel:get_panel_info()
   return {
     CurDir           = self.curr_object;
     Flags            = bor(F.OPIF_DISABLESORTGROUPS, F.OPIF_DISABLEFILTER),
@@ -105,7 +105,7 @@ function hws_panel:get_panel_info()
   }
 end
 
-function hws_panel:get_panel_list()
+function xmlc_panel:get_panel_list()
   local rc = false
   if self.panel_mode == "root" then
     rc = self:get_panel_list_root()
@@ -126,7 +126,7 @@ local function format_sys_coord(coord)
 end
 
 
-function hws_panel:get_panel_list_root()
+function xmlc_panel:get_panel_list_root()
 	local result = { { FileName=".."; FileAttributes="d"; } }
 	
 	for i, item in ipairs(self.reader.values) do
@@ -134,21 +134,19 @@ function hws_panel:get_panel_list_root()
 		
 		file_item.UserData = i
 		file_item.FileName = item.name
-		--file_item.FileSize =  0
 		file_item.CustomColumnData = {
 			sprintf('%5d', i), 
 			sprintf('%5d', item.rail), 
 			sprintf('%5d', item.channel),
-			--sprintf('%9d', item.coord),
 			format_sys_coord(item.coord),
 			sprintf('%9d', item.value),
-			}
+		}
 		result[#result+1]= file_item
 	end
 	return result
 end
 
-function hws_panel:handle_keyboard(handle, key_event)
+function xmlc_panel:handle_keyboard(handle, key_event)
 	local vcode  = key_event.VirtualKeyCode
 	local cstate = key_event.ControlKeyState
 	local ctrl   = cstate == F.LEFT_CTRL_PRESSED or cstate == F.RIGHT_CTRL_PRESSED
@@ -158,13 +156,12 @@ function hws_panel:handle_keyboard(handle, key_event)
 		self:view_data(vcode == VK.F4)
 		return true
 	elseif vcode == VK.F5 then
-		self:filter_name()
-	elseif vcode == VK.F6 then
-		self:filter_rail()
+		self:show_filter()
+		return true
 	end
 end
 
-function hws_panel:filter_name()
+function xmlc_panel:show_filter()
 	local names = {}
 	for i, item in ipairs(self.reader.values) do
 		local v = item.name
@@ -184,7 +181,6 @@ function hws_panel:filter_name()
 	local list_flags = F.DIF_LISTNOAMPERSAND + F.DIF_FOCUS -- F.DIF_LISTNOBOX
 	local dlg_items = {
 		{F.DI_LISTBOX,   1,1,58,22, list_items, 0, 0, list_flags,      "Name"},
-		
 	}
 
 	local function DlgProc(hDlg, Msg, Param1, Param2)
@@ -227,21 +223,19 @@ function hws_panel:filter_name()
 	
 end
 
-function hws_panel:filter_rail()
-	
+
+function xmlc_panel:view_data(edit)
+	far.Message('not implemented yet')
+--	local item = panel.GetCurrentPanelItem(nil, 1)
+--	if not item then return end
+--	local tmp_file_name = self.reader:Export(item.UserData)
+--	if tmp_file_name then
+--		if edit then
+--			editor.Editor(tmp_file_name, "", nil, nil, nil, nil, F.EF_DISABLESAVEPOS + F.EF_DISABLEHISTORY, nil, nil, 65001)
+--		else
+--			viewer.Viewer(tmp_file_name, nil, 0, 0, -1, -1, bor(F.VF_DISABLEHISTORY, F.VF_DELETEONLYFILEONCLOSE), 65001) -- , F.VF_IMMEDIATERETURN, F.VF_NONMODAL
+--		end
+--	end
 end
 
-function hws_panel:view_data(edit)
-	local item = panel.GetCurrentPanelItem(nil, 1)
-	if not item then return end
-	local tmp_file_name = self.reader:Export(item.UserData)
-	if tmp_file_name then
-		if edit then
-			editor.Editor(tmp_file_name, "", nil, nil, nil, nil, F.EF_DISABLESAVEPOS + F.EF_DISABLEHISTORY, nil, nil, 65001)
-		else
-			viewer.Viewer(tmp_file_name, nil, 0, 0, -1, -1, bor(F.VF_DISABLEHISTORY, F.VF_DELETEONLYFILEONCLOSE), 65001) -- , F.VF_IMMEDIATERETURN, F.VF_NONMODAL
-		end
-	end
-end
-
-return hws_panel
+return xmlc_panel
