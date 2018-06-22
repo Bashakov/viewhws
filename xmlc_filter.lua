@@ -3,40 +3,116 @@ require 'common'
 local F = far.Flags
 local VK = win.GetVirtualKeys()
 
-local function prepareFilterTable(data)
-	res = {}
-	for v,c in pairs(data) do
-		res[#res+1] = {value=v, count=c}
+local sprintf = string.format
+
+	
+function table.merge(...)
+	local dst = {}
+	for _, src in ipairs{...} do
+		table.move(src, 1, #src, #dst+1, dst)
+	end
+	return dst
+end
+
+-- =========================== FILTER ITEM ============================
+
+local filter_block = {}
+local filter_block_mt = {__index=filter_block}
+
+function filter_block.init(cntr)
+	initial = {}
+	selected = {}
+	for v,c in pairs(cntr) do
+		table.insert(initial, {value=v, count=c, text=string.format('%s (%d)', v, c)})
+		selected[v] = true
 	end
 	
-	table.sort(res, function(a,b) return (a.value < b.value) end)
-	return res
-end
-
-local function map(tbl, fn)
-	local res = {}
-	for i,v in ipairs(tbl) do
-		res[i] = fn(tbl[i])
-	end
-	return res
-end
-
-local function get_values(tbl)
-	local res = {}
-	for i, v in ipairs(tbl) do
-		res[v.value] = true
-	end
-	return res
-end
+	table.sort(initial, function(a,b) return (a.value < b.value) end)
 	
---local function get_area_size(items)	
---	local w=0
---	for _, item in ipairs(items) do
---		w = math.max(w, #item.value)
---	end
---	return w, #items
---end
+	local self = {
+		initial=initial,
+		selected=selected,
+	}
 
+	return setmetatable(self, filter_block_mt)
+end
+
+function filter_block:visible(value)
+	return self.selected[value]
+end
+
+function filter_block:get_area_size(a, b)
+	local w = 0
+	for i, item in ipairs(self.initial) do
+		w = math.max(w, #item.text)
+		--far.Message(string.format('%d/%d: %s', i, #self.initial, item.text))
+	end
+	return w+6, #self.initial+1
+end
+
+function filter_block:init_controls(x, y, w, h, title, controls, callbacks)
+	local cw, ch = self:get_area_size()
+	
+	w = w or cw
+	h = h or ch
+	
+	table.insert(controls, {F.DI_SINGLEBOX, 	x, y, x+w, y+h,  0,  0, 0, F.DIF_LEFTTEXT, title})
+	local checkbox_items = {}
+	
+	for i, item in ipairs(self.initial) do
+--		local cb = function(s)
+--			assert(type(s) == 'boolean')
+--			self.selected[item.value] = set
+--		end
+--		table.insert(callbacks, cb)
+--		local ixd_cb = #callbacks
+		
+		local check = self.selected[item.value] and 1 or 0
+		local dlg_item = {
+				F.DI_CHECKBOX, 			-- type
+				x+1, y+i, x+w-2, y+i,	-- X1, Y1, X2, Y2
+				check, 					-- state
+				0, 0, 0,				-- hyst, mask,flags
+				item.text, 				-- data
+				0, 						-- maxlen
+				ixd_cb					-- UserData
+			}
+		table.insert(controls, dlg_item)
+		checkbox_items[#controls] = true
+	end
+	
+	local function set_checkboxes(hDlg, check)
+		local state = check and F.BSTATE_CHECKED or F.BSTATE_UNCHECKED
+		for id, _ in pairs(checkbox_items) do
+			far.SendDlgMessage(hDlg, F.DM_SETCHECK, id, state)
+		end
+	end
+		
+	table.insert(callbacks, function(hDlg) set_checkboxes(hDlg, true) end)	
+	table.insert(controls, {
+		F.DI_BUTTON,      	-- type
+		x+2,  y+#self.initial+1, 0, 0,   -- X1, Y1, X2, Y2
+		0,0,0,				-- state, hyst, mask,
+		F.DIF_BTNNOCLOSE,	-- flags
+		"+",				-- text
+		0, 
+		#callbacks
+	})
+
+	table.insert(callbacks, function(hDlg) set_checkboxes(hDlg, false) end)	
+	table.insert(controls, {
+		F.DI_BUTTON,      	-- type
+		x+7,  y+#self.initial+1, 0, 0,   -- X1, Y1, X2, Y2
+		0,0,0,				-- state, hyst, mask,
+		F.DIF_BTNNOCLOSE,	-- flags
+		"-",				-- text
+		0, 
+		#callbacks
+		})
+
+	--far.Message(string.format('%s: %d %d | %d', title, h, #self.initial, #ctrls))
+	
+end
 
 -- =========================== FILTER ============================
 
@@ -63,39 +139,77 @@ function xmlc_filter.init(xmlc_reader)
 	end
 	
 	local self = {
-		initial = {
-			names = prepareFilterTable(names),
-			channels = prepareFilterTable(channels),
-			rails = prepareFilterTable(rails),
-			min_coord = min_coord or 0,
-			max_coord = max_coord or 0,
-		},
+		names = filter_block.init(names),
+		channels = filter_block.init(channels),
+		rails = filter_block.init(rails),
+		min_coord = min_coord or 0,
+		max_coord = max_coord or 0,
 		enable = false,
 	}
+	self.user_min_coord = self.min_coord
+	self.user_max_coord = self.max_coord
+	
 	setmetatable(self, xmlc_filter_mt)
-	self:prepare()
+	
 	return self
 end
 
-function xmlc_filter:prepare()
-	self.user = {
-		names = get_values(self.initial.names),
-		channels = get_values(self.initial.channels),
-		rails = get_values(self.initial.rails),
-		min_coord = self.initial.min_coord,
-		max_coord = self.initial.max_coord,
-	}
+function xmlc_filter:_prepare_dlg()
+	local controls = {}
+	local callbacks = {}
+	
+	local function DlgProc(hDlg, Msg, Param1, Param2)
+		if Msg == F.DN_INITDIALOG then
+			--far.Message('DN_INITDIALOG')
+		elseif Msg == F.DN_BTNCLICK then
+			local dlg_item_data = far.SendDlgMessage(hDlg, F.DM_GETITEMDATA, Param1, 0)
+			if 0 < dlg_item_data and dlg_item_data <= #callbacks then
+				callbacks[dlg_item_data](hDlg)
+			end
+			return true
+		end
+	end
+
+	local nw, nh = self.names:get_area_size()
+	local cw, ch = self.channels:get_area_size()
+	local rw, rh = self.rails:get_area_size()
+	
+	self.names:init_controls(1, 1, nil, nil, 'Names', controls, callbacks)
+	self.channels:init_controls(nw+3, 1, nil, nil, 'Channels', controls, callbacks)
+	self.rails:init_controls(nw+cw+5, 1, nil, nil, 'Rails', controls, callbacks)
+	
+	local max_h = math.max(nh, ch, rh)
+	
+	local guid = win.Uuid("5943454A-B98B-4c94-8146-C212C16C010E")
+	local dlg = far.DialogInit(guid, -1, -1, nw+cw+rw+9, max_h+2, nil, controls, F.FDLG_NONE, DlgProc)
+	return dlg
 end
 
-function xmlc_filter:show()
 
-	local dlg_items = {}
-		
-	for i, item in pairs(self.initial.names) do
-		table.insert(dlg_items, {F.DI_CHECKBOX,   1,1+i,15,1+1, 0, 0, 0, 0, item.value})
+function xmlc_filter:show()
+	local dlg = self:_prepare_dlg()
+	local rc = far.DialogRun(dlg)
+	if rc == 1 then  -- ok
+		-- pass
+	end
+	-- far.DialogFree (dlg)
+end
+
+function xmlc_filter:visible(item)
+	if self.enable then
+		return true
 	end
 	
-	
+	return self.user.names[item.name] and
+		self.user.channels[item.channels] and
+		self.user.rails[item.rails] and
+		self.user.min_coord <= item.coord and
+		self.user.max_coord >= item.coord
+end
+
+
+return xmlc_filter
+
 
 --	local function DlgProc(hDlg, Msg, Param1, Param2)
 --		if Msg == F.DN_INITDIALOG then
@@ -120,35 +234,3 @@ function xmlc_filter:show()
 --			--far.Message('DN_EDITCHANGE')
 --		end
 --	end
-
-	local guid = win.Uuid("5943454A-B98B-4c94-8146-C212C16C010E")
-	local dlg = far.DialogInit(guid, -1, -1, 60, 25, nil, dlg_items, F.FDLG_NONE, nil)
-	local rc = far.DialogRun(dlg)
-	if rc == 1 then  -- ok
-		-- pass
-	end
-	far.DialogFree(dlg)
-	
---	local s = ""
---	for i, n in ipairs(list_items) do
---		s = s .. string.format('%d %s %x\n', i, n.Text, n.Flags)
---	end
---	far.Message(s)
-	
-end
-
-function xmlc_filter:visible(item)
-	if self.enable then
-		return true
-	end
-	
-	return self.user.names[item.name] and
-		self.user.channels[item.channels] and
-		self.user.rails[item.rails] and
-		self.user.min_coord <= item.coord and
-		self.user.max_coord >= item.coord
-end
-
-
-return xmlc_filter
-

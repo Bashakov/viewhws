@@ -7,7 +7,10 @@ if not package.path:find(plugin_import_path, 1, true) then
 	package.path = plugin_import_path .. package.path
 end
 
+
+
 local function LoadScript(name, ...)
+	package.loaded[name] = nil
 	local path = far.PluginStartupInfo().ModuleDir .. name .. ".lua"
 	local f, errmsg = loadfile(path)
 	if f then return f(...) end
@@ -17,8 +20,8 @@ end
 
 local F = far.Flags
 
-LoadScript 'common'			-- for debug reload
-LoadScript 'xmlc_filter' 	-- for debug reload
+LoadScript 'common'			
+LoadScript 'xmlc_filter' 	
 local xmlc_reader = LoadScript 'xmlc_reader'
 local xmlc_panel = LoadScript 'xmlc_panel'
 

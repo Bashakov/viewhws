@@ -28,7 +28,7 @@ function xmlc_panel.open(file_name)
 	}
 	setmetatable(self, xmlc_panel_mt)
 	if self.reader:open(file_name) then
-		self.filter = xmlc_filter.init(reader)
+		self.filter = xmlc_filter.init(self.reader)
 		self:open_root()
 		return self
 	end
